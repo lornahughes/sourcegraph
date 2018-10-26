@@ -661,6 +661,7 @@ func (r *searchResolver) doResults(ctx context.Context, forceOnlyResultType stri
 		Pattern:         p,
 		Repos:           repos,
 		Query:           r.query,
+		ZoektQuery:      r.zoektQuery,
 		UseFullDeadline: r.searchTimeoutFieldSet(),
 	}
 	if err := args.Pattern.Validate(); err != nil {

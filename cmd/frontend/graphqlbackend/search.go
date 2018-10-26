@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/felixfbecker/stringscore"
+	zoektquery "github.com/google/zoekt/query"
 	"github.com/pkg/errors"
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/backend"
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/db"
@@ -51,13 +53,19 @@ func maxReposToSearch() int {
 func (r *schemaResolver) Search(args *struct {
 	Query string
 }) (*searchResolver, error) {
-	query, err := query.ParseAndCheck(args.Query)
-	if err != nil {
+	zoektQuery, _ := zoektquery.Parse(args.Query)
+	sgQuery, err := query.ParseAndCheck(args.Query)
+	if err != nil && zoektQuery == nil {
 		return nil, err
 	}
+	if sgQuery == nil {
+		// HACK pass a search query that won't match anything
+		sgQuery, _ = query.ParseAndCheck(fmt.Sprintf("%x%x", rand.Uint64(), rand.Uint64()))
+	}
 	return &searchResolver{
-		root:  r,
-		query: query,
+		root:       r,
+		query:      sgQuery,
+		zoektQuery: zoektQuery,
 	}, nil
 }
 
@@ -77,6 +85,8 @@ type searchResolver struct {
 	root *schemaResolver
 
 	query *query.Query // the parsed search query
+
+	zoektQuery zoektquery.Q
 
 	// Cached resolveRepositories results.
 	reposMu                   sync.Mutex

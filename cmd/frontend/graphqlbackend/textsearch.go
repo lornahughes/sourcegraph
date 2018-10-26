@@ -357,26 +357,34 @@ func searchFilesInRepo(ctx context.Context, repo *types.Repo, gitserverRepo gits
 	return matches, limitHit, err
 }
 
-func zoektSearchHEAD(ctx context.Context, query *search.PatternInfo, repos []*search.RepositoryRevisions, useFullDeadline bool) (fm []*fileMatchResolver, limitHit bool, reposLimitHit map[string]struct{}, err error) {
-	if len(repos) == 0 {
-		return nil, false, nil, nil
+func zoektSearchHEAD(ctx context.Context, query *search.PatternInfo, finalQuery zoektquery.Q, repos []*search.RepositoryRevisions, useFullDeadline bool) (fm []*fileMatchResolver, limitHit bool, reposLimitHit map[string]struct{}, err error) {
+	toRepo := func(s string) *types.Repo {
+		return &types.Repo{URI: api.RepoURI(s)}
+	}
+	if finalQuery == nil {
+		if len(repos) == 0 {
+			return nil, false, nil, nil
+		}
+
+		// Tell zoekt which repos to search
+		repoSet := &zoektquery.RepoSet{Set: make(map[string]bool, len(repos))}
+		repoMap := make(map[string]*types.Repo, len(repos))
+		for _, repoRev := range repos {
+			repoSet.Set[string(repoRev.Repo.URI)] = true
+			repoMap[strings.ToLower(string(repoRev.Repo.URI))] = repoRev.Repo
+		}
+		toRepo = func(s string) *types.Repo {
+			return repoMap[strings.ToLower(s)]
+		}
+
+		queryExceptRepos, err := queryToZoektQuery(query)
+		if err != nil {
+			return nil, false, nil, err
+		}
+		finalQuery = zoektquery.NewAnd(repoSet, queryExceptRepos)
 	}
 
-	// Tell zoekt which repos to search
-	repoSet := &zoektquery.RepoSet{Set: make(map[string]bool, len(repos))}
-	repoMap := make(map[api.RepoURI]*types.Repo, len(repos))
-	for _, repoRev := range repos {
-		repoSet.Set[string(repoRev.Repo.URI)] = true
-		repoMap[api.RepoURI(strings.ToLower(string(repoRev.Repo.URI)))] = repoRev.Repo
-	}
-
-	queryExceptRepos, err := queryToZoektQuery(query)
-	if err != nil {
-		return nil, false, nil, err
-	}
-	finalQuery := zoektquery.NewAnd(repoSet, queryExceptRepos)
-
-	tr, ctx := trace.New(ctx, "zoekt.Search", fmt.Sprintf("%d %+v", len(repoSet.Set), finalQuery.String()))
+	tr, ctx := trace.New(ctx, "zoekt.Search", fmt.Sprintf("%d %+v", len(repos), finalQuery.String()))
 	defer func() {
 		tr.SetError(err)
 		if len(fm) > 0 {
@@ -530,7 +538,7 @@ func zoektSearchHEAD(ctx context.Context, query *search.PatternInfo, repos []*se
 			JLineMatches: lines,
 			JLimitHit:    fileLimitHit,
 			uri:          fmt.Sprintf("git://%s#%s", file.Repository, file.FileName),
-			repo:         repoMap[api.RepoURI(strings.ToLower(string(file.Repository)))],
+			repo:         toRepo(string(file.Repository)),
 			commitID:     "", // zoekt only searches default branch
 		}
 	}
@@ -825,7 +833,7 @@ func searchFilesInRepos(ctx context.Context, args *search.Args) (res []*fileMatc
 	go func() {
 		// TODO limitHit, handleRepoSearchResult
 		defer wg.Done()
-		matches, limitHit, reposLimitHit, searchErr := zoektSearchHEAD(ctx, args.Pattern, zoektRepos, args.UseFullDeadline)
+		matches, limitHit, reposLimitHit, searchErr := zoektSearchHEAD(ctx, args.Pattern, args.ZoektQuery, zoektRepos, args.UseFullDeadline)
 		mu.Lock()
 		defer mu.Unlock()
 		if ctx.Err() == nil {

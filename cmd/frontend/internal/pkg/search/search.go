@@ -3,6 +3,7 @@ package search
 import (
 	"regexp/syntax"
 
+	zoektquery "github.com/google/zoekt/query"
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/internal/pkg/search/query"
 )
 
@@ -72,6 +73,8 @@ type Args struct {
 	// instead, but Query is useful for checking extra fields that are set and
 	// ignored by Pattern, such as index:no
 	Query *query.Query
+
+	ZoektQuery zoektquery.Q
 
 	// UseFullDeadline indicates that the search should try do as much work as
 	// it can within context.Deadline. If false the search should try and be
