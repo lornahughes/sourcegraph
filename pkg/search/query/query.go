@@ -568,6 +568,38 @@ func ExpandRepo(q Q, listFn func(include, exclude []string) (map[string]bool, er
 	return Simplify(q), retErr
 }
 
+// RepoUniverse returns a set of all repositories that could potentially match
+// q. It expects q does not contain any Repo atoms (it has been run through
+// ExpandRepo). If it can't be calculated, ok is false.
+func RepoUniverse(q Q) (ok boolean, repos map[string]bool) {
+	sets := func(qs []Q) (ok bool, inc []*RepoSet, exc []*RepoSet) {
+		for _, q := range qs {
+			switch c := q.(type) {
+			case *And:
+				return false, nil, nil
+			case *Or:
+				return false, nil, nil
+			case *Type:
+				return false, nil, nil
+			case *Not:
+				if rs, ok := c.Child.(*RepoSet); ok {
+					exc = append(exc, rs)
+				} else {
+					return false, nil, nil
+				}
+			case *RepoSet:
+				inc = append(inc, rs)
+			}
+		}
+			
+
+		}
+	}
+	q = Map(q, func(q Q) Q {
+			
+	})
+}
+
 // VisitAtoms runs `v` on all atom queries within `q`.
 func VisitAtoms(q Q, v func(q Q)) {
 	Map(q, func(iQ Q) Q {

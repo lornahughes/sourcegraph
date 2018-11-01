@@ -140,6 +140,9 @@ func TestExpandRepo(t *testing.T) {
 		"r:foo test":                 "(and substr:\"test\" (reposet foo))",
 		"r:foo test -hello":          "(and substr:\"test\" (not substr:\"hello\") (reposet foo))",
 		"(r:ba test (r:b r:a -r:z))": "(and substr:\"test\" (reposet bar))",
+
+		// Our only case where a reposet is a child of a not.
+		"bar -(r:foo test)": "(and substr:\"bar\" (not (and substr:\"test\" (reposet foo))))",
 	}
 	for qStr, want := range cases {
 		q, err := Parse(qStr)
