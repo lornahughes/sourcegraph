@@ -1,16 +1,16 @@
 # URI schemes
 
-Sourcegraph uses the following URI schemes.
+Sourcegraph uses the following URI schemes. They are required because Sourcegraph exposes APIs and communicates with other systems that assume files and directories can be identified by a string.
 
 ## `repo:` and `repo+rev:`
 
-URIs of the form `repo://REPO/PATH` and `repo+rev://REPO/REV/PATH` refer to a file or directory at `PATH` in a repository named `REPO` at (optional) revision `REV`.
+URIs of the form `repo://REPO/PATH` and `repo+rev://REPO/REV/PATH` refer to a file or directory at `PATH` in a repository named `REPO` at (optional) revision `REV`. URIs with `repo:` scheme refer to a repository or file therein at the repository's default branch.
 
 The goals of this URI scheme are to:
 
 - identify resources inside repositories
 - be human-readable
-- be opaque (to discourage poor design decisions in clients)
+- encourage good design decisions in clients
 
 These URIs are intentionally ambiguous and can't be parsed into their components (`REPO`, `REV`, and `PATH`) without additional information. This constraint discourages clients from making poor design decisions (as detailed for the deprecated `git:` URI scheme below).
 
@@ -50,9 +50,15 @@ URIs of the form `git://REPO?REV#PATH` refer to a file or directory (or other Gi
 
 This URI scheme is used by `lsp-proxy`, search- and file location-related GraphQL APIs, and Sourcegraph extensions.
 
-It is **deprecated** in favor of the opaque `repo:` and `repo+rev:` URI schemes because:
+### Deprecated
 
-- Many tools (such as language servers and editors) do not support it because they ignore the URI query and fragment when asking whether two URIs refer to the same file. Therefore they behave as though all `git:` URIs for the same repository are actually for the same file. This leads to very confusing behavior.
+The `git:` URI scheme is **deprecated**.
+
+When communicating with external tools that need a single URI to represent files/directories, use the opaque `repo:` and `repo+rev:` URI schemes defined above because:
+
+- Many tools (such as language servers and editors) do not support it because they ignore the URI query and fragment when asking whether two URIs refer to the same file. Therefore they behave as though all `git:` URIs for the same repository are actually for the same file. This leads to very confusing behavior. It is possible to work around this problem by adding a translation layer, but that adds a lot of complexity.
 - Being able to parse the repository name, revision, and file path from the URI (and construct the URIs manually) leads to clients making poor design decisions that frequently lead to bugs.
 
   Example: Sourcegraph compares repository names case insensitively. If a client constructs a URI manually from an uppercase repository name (or otherwise obtains such a URL) and compares it against an equivalent lowercase URI, the client must know that they can be compared case-insensitively, or else it will incorrectly treat them as distinct. The best solution is for Sourcegraph to canonicalize all URIs it generates, but this breaks if many clients are manually constructing URLs (and not canonicalizing them).
+
+When possible (such as when communicating only among internal Sourcegraph services), pass along each individual field (`REPO`, `REV`, and `PATH`) separately in a Go struct or JSON object to avoid needing to depend on parsing and serializing those values. This also gives you more control over the behavior (such as wanting to preserve the user's input revision in the URL or UI but resolve it to a full SHA for the underlying operations).
